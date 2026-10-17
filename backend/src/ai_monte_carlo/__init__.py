@@ -1,6 +1,7 @@
 """AI Monte Carlo Lab - Simulation Engine.
 
-Phase 1 Core Library for LLM Workload and Cost Monte Carlo Simulation.
+Phase 1 & Phase 2 Core Library for LLM Workload, Predictive Demand Modeling,
+and Cost Monte Carlo Simulation.
 """
 
 from ai_monte_carlo.config import (
@@ -12,9 +13,29 @@ from ai_monte_carlo.config import (
     WorkloadConfig,
     WorkloadDistributionType,
 )
+from ai_monte_carlo.data.demand import (
+    DailyDemandConfig,
+    generate_daily_demand,
+)
 from ai_monte_carlo.data.synthetic import (
     generate_synthetic_requests,
     save_synthetic_requests,
+)
+from ai_monte_carlo.models.demand import (
+    BaselineDemandModel,
+    DemandMetrics,
+    HorizonForecast,
+    ModelComparison,
+    PoissonDemandModel,
+    calculate_demand_metrics,
+    extract_demand_features,
+    forecast_demand_horizon,
+    temporal_train_test_split,
+)
+from ai_monte_carlo.services.experiment import (
+    DemandExperimentResult,
+    ExperimentConfig,
+    run_demand_experiment,
 )
 from ai_monte_carlo.simulation.generators import (
     sample_latency,
@@ -46,9 +67,26 @@ __all__ = [
     "LatencyConfig",
     "WorkloadConfig",
     "MonteCarloConfig",
-    # Data
+    # Data - Phase 1
     "generate_synthetic_requests",
     "save_synthetic_requests",
+    # Data - Phase 2
+    "DailyDemandConfig",
+    "generate_daily_demand",
+    # Models - Phase 2
+    "DemandMetrics",
+    "ModelComparison",
+    "HorizonForecast",
+    "temporal_train_test_split",
+    "extract_demand_features",
+    "calculate_demand_metrics",
+    "BaselineDemandModel",
+    "PoissonDemandModel",
+    "forecast_demand_horizon",
+    # Services - Phase 2
+    "ExperimentConfig",
+    "DemandExperimentResult",
+    "run_demand_experiment",
     # Generators
     "sample_tokens",
     "sample_tokens_lognormal",

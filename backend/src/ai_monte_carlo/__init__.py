@@ -57,6 +57,27 @@ from ai_monte_carlo.simulation.monte_carlo import (
     MonteCarloResult,
     run_monte_carlo,
 )
+from ai_monte_carlo.analysis import (
+    AnalyticalComparisonResult,
+    AnalyticalCostMoments,
+    ConvergenceAnalysisResult,
+    ConvergenceCheckpoint,
+    CorrelationAnalysisResult,
+    CorrelationPairResult,
+    ParameterSensitivitySummary,
+    ParameterVariation,
+    SensitivityAnalysisResult,
+    analyze_convergence,
+    analyze_dataframe_correlations,
+    calculate_bivariate_correlations,
+    calculate_nominal_analytical_moments,
+    calculate_wilson_score_interval,
+    compare_simulation_with_analytical,
+    generate_adaptive_checkpoints,
+    generate_synthetic_requests_with_correlation,
+    run_sensitivity_analysis,
+    sample_joint_tokens,
+)
 
 __all__ = [
     # Config
@@ -104,4 +125,24 @@ __all__ = [
     # Monte Carlo Engine
     "run_monte_carlo",
     "MonteCarloResult",
+    # Analysis - Phase 3
+    "ConvergenceCheckpoint",
+    "ConvergenceAnalysisResult",
+    "calculate_wilson_score_interval",
+    "generate_adaptive_checkpoints",
+    "analyze_convergence",
+    "ParameterVariation",
+    "ParameterSensitivitySummary",
+    "SensitivityAnalysisResult",
+    "run_sensitivity_analysis",
+    "CorrelationPairResult",
+    "CorrelationAnalysisResult",
+    "calculate_bivariate_correlations",
+    "analyze_dataframe_correlations",
+    "sample_joint_tokens",
+    "generate_synthetic_requests_with_correlation",
+    "AnalyticalCostMoments",
+    "AnalyticalComparisonResult",
+    "calculate_nominal_analytical_moments",
+    "compare_simulation_with_analytical",
 ]

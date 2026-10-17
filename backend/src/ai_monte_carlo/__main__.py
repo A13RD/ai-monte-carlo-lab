@@ -148,10 +148,101 @@ def run_phase_2_demo() -> None:
     print("=" * 75)
 
 
+def run_phase_3_demo() -> None:
+    print("\n" + "=" * 75)
+    print("AI MONTE CARLO LAB - VALIDACION ESTADISTICA AVANZADA (FASE 3)")
+    print("Convergencia + Sensibilidad + Correlaciones + Referencia Analitica")
+    print("=" * 75)
+
+    from ai_monte_carlo.analysis import (
+        analyze_convergence,
+        analyze_dataframe_correlations,
+        compare_simulation_with_analytical,
+        generate_synthetic_requests_with_correlation,
+        run_sensitivity_analysis,
+    )
+
+    base_config = MonteCarloConfig(
+        n_iterations=1_000,
+        budget_limit=120.0,
+        pricing=PricingConfig(
+            cost_per_million_input=2.50,
+            cost_per_million_output=10.00,
+            fixed_monthly_cost=15.00,
+        ),
+        input_tokens=TokenDistributionConfig(
+            family=DistributionType.LOGNORMAL,
+            mean=600.0,
+            std=250.0,
+            min_tokens=10,
+        ),
+        output_tokens=TokenDistributionConfig(
+            family=DistributionType.LOGNORMAL,
+            mean=350.0,
+            std=150.0,
+            min_tokens=10,
+        ),
+        workload=WorkloadConfig(
+            family=WorkloadDistributionType.POISSON,
+            mean_daily_requests=200.0,
+            days_per_month=30,
+        ),
+        seed=42,
+    )
+
+    # 1. Ejecutar simulacion base
+    base_result = run_monte_carlo(base_config)
+
+    # 2. Componente A: Convergencia
+    print("\n1. Analisis de Convergencia Monte Carlo (Checkpoints Adaptativos):")
+    conv_res = analyze_convergence(base_result, method_ci="t")
+    print(f"   {'Iteraciones':>12} | {'Media Costo':>12} | {'Error Est.':>11} | {'IC 95% Media':>24} | {'P(Costo > B)':>13} | {'IC Wilson 95%':>22}")
+    print("   " + "-" * 105)
+    for cp in conv_res.checkpoints:
+        mean_ci_str = f"[{cp.ci_mean_lower:>9.2f}, {cp.ci_mean_upper:>9.2f}]"
+        prob_str = f"{cp.prob_exceed_budget * 100:.2f}%" if cp.prob_exceed_budget is not None else "N/A"
+        wilson_str = f"[{cp.ci_prob_lower * 100:.2f}%, {cp.ci_prob_upper * 100:.2f}%]" if cp.ci_prob_lower is not None else "N/A"
+        print(f"   {cp.checkpoint_size:>12,d} | ${cp.mean:>11.2f} | ${cp.se_mean:>10.4f} | {mean_ci_str:>24} | {prob_str:>13} | {wilson_str:>22}")
+
+    # 3. Componente B: Sensibilidad (OAT)
+    print("\n2. Analisis de Sensibilidad One-At-a-Time (Tornado Ranking):")
+    sens_res = run_sensitivity_analysis(base_config, perturbation_fraction=0.20, base_result=base_result)
+    print(f"   {'Rank':<5} | {'Parametro':<32} | {'Base':>10} | {'Bajo (-20%)':>12} | {'Alto (+20%)':>12} | {'Rango (USD)':>12} | {'Elasticidad':>11}")
+    print("   " + "-" * 108)
+    for s in sens_res.parameter_summaries:
+        elast_str = f"{s.max_abs_elasticity:.2f}" if s.max_abs_elasticity is not None else "N/A (base=0)"
+        print(f"   {s.rank_impact:<5} | {s.parameter_name:<32} | {s.base_value:>10.2f} | ${s.cost_at_low:>11.2f} | ${s.cost_at_high:>11.2f} | ${s.swing_mean_cost:>11.2f} | {elast_str:>11}")
+
+    # 4. Componente C: Correlaciones
+    print("\n3. Analisis de Correlaciones en Telemetria Sintetica:")
+    synth_df = generate_synthetic_requests_with_correlation(n_requests=2_000, seed=42)
+    corr_res = analyze_dataframe_correlations(synth_df)
+    print(f"   {'Variable X':<18} vs {'Variable Y':<18} | {'Pearson r':>10} (p-val) | {'Spearman rho':>12} (p-val) | Naturaleza Relacion")
+    print("   " + "-" * 95)
+    for pr in corr_res.pair_results:
+        print(f"   {pr.variable_x:<18} vs {pr.variable_y:<18} | {pr.pearson_r:>10.4f} ({pr.pearson_p_value:.3e}) | {pr.spearman_rho:>12.4f} ({pr.spearman_p_value:.3e}) | {pr.relationship_nature}")
+
+    # 5. Componente D: Validacion Analitica
+    print("\n4. Comparacion con Esperanza y Varianza Teorica (Suma Compuesta):")
+    comp_res = compare_simulation_with_analytical(base_result)
+    theor = comp_res.theoretical_moments
+    print(f"   - Esperanza Teorica E[C]:        ${theor.expected_monthly_cost:.4f} USD")
+    print(f"   - Media Simulada bar{{C}}:         ${comp_res.simulated_mean_cost:.4f} USD")
+    print(f"   - Error Estandar Monte Carlo:    ${comp_res.mc_standard_error:.4f} USD")
+    print(f"   - Error Absoluto |bar{{C}} - E[C]|:  ${comp_res.cost_mean_abs_error:.4f} USD ({comp_res.cost_mean_relative_error * 100:.3f}%)")
+    print(f"   - Puntuacion Z (z-score):        {comp_res.z_score_mean:.4f} (Umbral de consistencia: +/-{comp_res.z_threshold})")
+    print(f"   - Consistencia Estadistica:      {'APROBADA (|z| <= 3.0)' if comp_res.is_mean_consistent else 'DISCREPANCIA DETECTADA'}")
+    print(f"   - Desviacion Estandar: Teorica = ${theor.std_monthly_cost:.2f} | Simulada = ${comp_res.simulated_std_cost:.2f} (Error: {comp_res.cost_std_rel_error * 100:.2f}%)")
+    print(f"   - Conteo Solicitudes E[N]:       Teorico = {theor.expected_requests:.0f} | Simulado = {comp_res.simulated_mean_requests:.1f}")
+    print("=" * 75)
+
+
 def main() -> None:
     run_phase_1_demo()
     run_phase_2_demo()
+    run_phase_3_demo()
 
 
 if __name__ == "__main__":
     main()
+

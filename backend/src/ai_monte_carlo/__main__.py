@@ -237,10 +237,25 @@ def run_phase_3_demo() -> None:
     print("=" * 75)
 
 
+import argparse
+
+
 def main() -> None:
-    run_phase_1_demo()
-    run_phase_2_demo()
-    run_phase_3_demo()
+    parser = argparse.ArgumentParser(description="AI Monte Carlo Lab CLI and API Server")
+    parser.add_argument("--serve", action="store_true", help="Start the FastAPI HTTP server")
+    parser.add_argument("--host", type=str, default="127.0.0.1", help="Host address for API server")
+    parser.add_argument("--port", type=int, default=8000, help="Port for API server")
+    parser.add_argument("--reload", action="store_true", help="Enable uvicorn hot reloading")
+
+    args = parser.parse_args()
+    if args.serve:
+        import uvicorn
+
+        uvicorn.run("ai_monte_carlo.api.app:app", host=args.host, port=args.port, reload=args.reload)
+    else:
+        run_phase_1_demo()
+        run_phase_2_demo()
+        run_phase_3_demo()
 
 
 if __name__ == "__main__":

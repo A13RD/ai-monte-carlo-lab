@@ -145,4 +145,9 @@ __all__ = [
     "AnalyticalComparisonResult",
     "calculate_nominal_analytical_moments",
     "compare_simulation_with_analytical",
+    # API - Phase 4
+    "app",
+    "create_app",
 ]
+
+from ai_monte_carlo.api import app, create_app

@@ -25,6 +25,18 @@ Laboratorio y motor de simulación estocástica para modelar el consumo de token
   - **Correlaciones:** Cálculo de Pearson $r$ y Spearman $\rho_s$ con p-valores, distinguiendo asociación empírica, dependencia construida por el generador y causalidad en sistemas reales. Muestreo conjunto opcional vía cópula gaussiana bivariada.
   - **Comparación Analítica:** Formulación teórica de sumas compuestas (Identidad de Wald y Ley de Varianza Total / Fórmula de Eve), evaluación de momentos de demanda (Poisson, Binomial Negativa, Fixed) y prueba de hipótesis con puntuación $Z$ ($Z_{\text{score}}$).
 
+- **Fase 4: API RESTful con FastAPI y Pydantic**
+  - **Diseño Desacoplado y Modular:** Capa HTTP separada en esquemas (`api/schemas/`), rutas (`api/routes/`), aplicación (`api/app.py`) y motor computacional existente.
+  - **Validación Estricta:** Esquemas Pydantic v2 fuertemente tipados con validación en límites físicos y matemáticos (parámetros no negativos, clipping ordenado, tamaños de muestra válidos).
+  - **Reproducibilidad y Determinismo:** Semillas configurables en peticiones para auditoría y replicabilidad exacta.
+  - **Endpoints Expuestos:**
+    - `GET /health` y `GET /api/v1/health`: Estado de salud, versión del paquete y readiness de subsistemas.
+    - `GET /docs` y `GET /redoc`: Documentación interactiva OpenAPI (Swagger UI y ReDoc).
+    - `GET /api/v1/simulation/defaults`: Configuración nominal por defecto para simulaciones Monte Carlo.
+    - `POST /api/v1/simulation/run`: Ejecución directa del motor Monte Carlo y cálculo de métricas financieras.
+    - `POST /api/v1/demand/experiment`: Pipeline integrado de predicción Poisson GLM, evaluación out-of-sample y simulación Monte Carlo coordinada.
+    - `POST /api/v1/demand/forecast`: Entrenamiento de Poisson GLM y proyección del horizonte futuro de demanda.
+
 ---
 
 ## Estructura del Repositorio
@@ -38,6 +50,19 @@ ai-monte-carlo-lab/
 │   │       ├── config.py
 │   │       ├── __init__.py
 │   │       ├── __main__.py
+│   │       ├── api/
+│   │       │   ├── __init__.py
+│   │       │   ├── app.py
+│   │       │   ├── routes/
+│   │       │   │   ├── __init__.py
+│   │       │   │   ├── demand.py
+│   │       │   │   ├── health.py
+│   │       │   │   └── simulation.py
+│   │       │   └── schemas/
+│   │       │       ├── __init__.py
+│   │       │       ├── common.py
+│   │       │       ├── demand.py
+│   │       │       └── simulation.py
 │   │       ├── analysis/
 │   │       │   ├── __init__.py
 │   │       │   ├── analytical.py
@@ -57,6 +82,7 @@ ai-monte-carlo-lab/
 │   │           └── monte_carlo.py
 │   └── tests/
 │       ├── test_analytical.py
+│       ├── test_api.py
 │       ├── test_convergence.py
 │       ├── test_correlation.py
 │       ├── test_demand_data.py
@@ -89,24 +115,76 @@ Dependencias principales:
 - `pandas >= 2.0.0`
 - `scipy >= 1.10.0`
 - `scikit-learn >= 1.4.0`
+- `pydantic >= 2.0.0`
+- `fastapi >= 0.110.0`
+- `uvicorn >= 0.28.0`
 - `pytest >= 8.0.0` (desarrollo)
+- `httpx >= 0.27.0` (desarrollo)
+
+---
+
+## Ejecución del Servidor API (Fase 4)
+
+Para iniciar el servidor local de desarrollo con recarga automática:
+
+```powershell
+cd backend
+python -m uvicorn ai_monte_carlo.api.app:app --host 127.0.0.1 --port 8000 --reload
+```
+
+O utilizando el punto de entrada integrado del paquete:
+
+```powershell
+cd backend
+python -m ai_monte_carlo --serve --port 8000
+```
+
+Una vez iniciado el servidor:
+- **Swagger UI (Documentación interactiva):** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+- **ReDoc (Documentación técnica):** [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
+- **Especificación OpenAPI (JSON):** [http://127.0.0.1:8000/openapi.json](http://127.0.0.1:8000/openapi.json)
+- **Health Check:** `GET http://127.0.0.1:8000/health`
+
+### Ejemplo de Petición para Simulación Monte Carlo
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/v1/simulation/run" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "n_iterations": 5000,
+    "budget_limit": 500.0,
+    "pricing": {
+      "cost_per_million_input": 2.50,
+      "cost_per_million_output": 10.00,
+      "fixed_monthly_cost": 20.00
+    },
+    "seed": 42
+  }'
+```
 
 ---
 
 ## Ejecución de Pruebas
 
-Para correr la suite completa de 97 pruebas automatizadas:
+Para correr la suite completa de 122 pruebas automatizadas (Fases 1, 2, 3 y 4):
 
 ```powershell
 cd backend
 python -m pytest
 ```
 
+Para correr únicamente las pruebas de la API:
+
+```powershell
+cd backend
+python -m pytest tests/test_api.py
+```
+
 ---
 
 ## Ejecución de Demostración CLI
 
-Para ejecutar la demostración completa de las tres fases:
+Para ejecutar la demostración académica completa de las fases 1 a 3 en consola:
 
 ```powershell
 cd backend
@@ -121,4 +199,3 @@ python -m ai_monte_carlo
 - [Decisiones Técnicas de la Fase 1](docs/decisiones-tecnicas.md)
 - [Modelo Predictivo y Coordinación de la Fase 2](docs/modelo-predictivo.md)
 - [Validación Estadística Avanzada y Análisis de Incertidumbre de la Fase 3](docs/validacion-avanzada.md)
-

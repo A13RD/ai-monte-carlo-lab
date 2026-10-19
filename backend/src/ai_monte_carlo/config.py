@@ -11,6 +11,9 @@ from enum import Enum
 from typing import Any
 
 
+MAX_EXPECTED_SIMULATED_REQUESTS = 30_000_000
+
+
 class DistributionType(str, Enum):
     """Supported parametric probability distributions for token generation."""
 

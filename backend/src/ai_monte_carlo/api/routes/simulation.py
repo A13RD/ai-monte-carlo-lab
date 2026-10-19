@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import dataclasses
+import math
 import time
+
+import numpy as np
 from fastapi import APIRouter, HTTPException, status
 
 from ai_monte_carlo.api.schemas.simulation import (
+    HistogramBinSchema,
     MetricsSummarySchema,
     SimulationRequest,
     SimulationResponse,
@@ -56,6 +60,12 @@ def run_simulation(request: SimulationRequest) -> SimulationResponse:
 
     cost_m = result.cost_metrics
     token_m = result.total_token_metrics
+    if cost_m.prob_exceed_budget is None:
+        raise RuntimeError("Simulation did not return a budget exceedance probability.")
+    bin_count = min(30, max(8, math.ceil(math.sqrt(result.config.n_iterations))))
+    histogram_counts, histogram_edges = np.histogram(
+        result.cost_samples, bins=bin_count
+    )
 
     effective_cfg = {
         "n_iterations": result.config.n_iterations,
@@ -87,9 +97,7 @@ def run_simulation(request: SimulationRequest) -> SimulationResponse:
     return SimulationResponse(
         iterations=result.config.n_iterations,
         budget_limit=result.config.budget_limit,
-        probability_exceeding_budget=(
-            cost_m.prob_exceed_budget if cost_m.prob_exceed_budget is not None else 0.0
-        ),
+        probability_exceeding_budget=cost_m.prob_exceed_budget,
         cost_metrics=MetricsSummarySchema(
             mean=cost_m.mean,
             sample_std=cost_m.sample_std,
@@ -110,6 +118,14 @@ def run_simulation(request: SimulationRequest) -> SimulationResponse:
             max=token_m.max_value,
             count=token_m.sample_size,
         ),
+        cost_histogram=[
+            HistogramBinSchema(
+                lower_bound=float(histogram_edges[index]),
+                upper_bound=float(histogram_edges[index + 1]),
+                count=int(histogram_counts[index]),
+            )
+            for index in range(bin_count)
+        ],
         effective_config=effective_cfg,
         summary=summary,
         execution_time_ms=elapsed_ms,

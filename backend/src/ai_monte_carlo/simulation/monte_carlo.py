@@ -25,6 +25,8 @@ from ai_monte_carlo.simulation.metrics import (
     summarize_metrics,
 )
 
+MAX_TOKEN_DRAWS_PER_CHUNK = 250_000
+
 
 @dataclass(frozen=True)
 class MonteCarloResult:
@@ -173,6 +175,13 @@ def run_monte_carlo(config: MonteCarloConfig) -> MonteCarloResult:
 
     # 1. Simulate monthly request counts
     monthly_expected_requests = config.workload.expected_monthly_requests
+    chunk_size = max(
+        1,
+        min(
+            2_000,
+            int(MAX_TOKEN_DRAWS_PER_CHUNK / max(monthly_expected_requests, 1.0)),
+        ),
+    )
     request_counts = sample_requests_count(
         rng=rng,
         family=config.workload.family,
@@ -186,12 +195,14 @@ def run_monte_carlo(config: MonteCarloConfig) -> MonteCarloResult:
         rng=rng,
         request_counts=request_counts,
         token_sampler_fn=lambda n: sample_tokens(rng, config.input_tokens, size=n),
+        chunk_size=chunk_size,
     )
 
     output_tokens = _aggregate_compound_tokens(
         rng=rng,
         request_counts=request_counts,
         token_sampler_fn=lambda n: sample_tokens(rng, config.output_tokens, size=n),
+        chunk_size=chunk_size,
     )
 
     total_tokens = input_tokens + output_tokens

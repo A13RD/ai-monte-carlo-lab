@@ -2,11 +2,24 @@
 
 from __future__ import annotations
 
+import os
+
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from ai_monte_carlo.api.routes import api_router
+
+
+def _cors_origins() -> list[str]:
+    configured_origins = os.getenv("AI_MONTE_CARLO_CORS_ORIGINS")
+    if configured_origins is None:
+        return ["http://localhost:3000", "http://127.0.0.1:3000"]
+
+    origins = [origin.strip() for origin in configured_origins.split(",") if origin.strip()]
+    if os.getenv("APP_ENV", "development").lower() == "production" and "*" in origins:
+        raise RuntimeError("Wildcard CORS origins are not allowed in production.")
+    return origins
 
 
 def create_app() -> FastAPI:
@@ -24,13 +37,12 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json",
     )
 
-    # CORS configuration to facilitate future frontend integration
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_origins=_cors_origins(),
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type"],
     )
 
     # Exception handler for domain ValueErrors

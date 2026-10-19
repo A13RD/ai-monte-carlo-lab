@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: ai-monte-carlo-lab-api
+    runtime: python
+    rootDir: backend
+    buildCommand: python -m pip install .
+    startCommand: python -m uvicorn ai_monte_carlo.api.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: AI_MONTE_CARLO_CORS_ORIGINS
+        sync: false

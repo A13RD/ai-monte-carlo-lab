@@ -53,7 +53,7 @@ class TestSimulationEndpoints:
         response = client.get("/api/v1/simulation/defaults")
         assert response.status_code == 200
         data = response.json()
-        assert data["n_iterations"] == 10_000
+        assert data["n_iterations"] == 1_000
         assert data["budget_limit"] == 500.0
         assert data["pricing"]["cost_per_million_input"] == 2.50
         assert data["pricing"]["cost_per_million_output"] == 10.00
@@ -109,6 +109,9 @@ class TestSimulationEndpoints:
         token_m = res["token_metrics"]
         assert token_m["mean"] > 0
         assert token_m["count"] == 2_000
+        histogram = res["cost_histogram"]
+        assert sum(item["count"] for item in histogram) == 2_000
+        assert all(item["lower_bound"] <= item["upper_bound"] for item in histogram)
 
         # Wald's Identity Theoretical check:
         # E[N] = 500 * 30 = 15,000
@@ -157,12 +160,38 @@ class TestSimulationEndpoints:
             ({"workload": {"mean_daily_requests": -10.0}}, 422),  # negative requests
             ({"workload": {"dispersion_parameter": 0.0}}, 422),  # dispersion <= 0
             ({"workload": {"days_per_month": 0}}, 422),  # days < 1
+            ({"n_iterations": 100_000}, 422),  # estimated request workload above safety limit
         ],
     )
     def test_simulation_validation_errors(self, invalid_patch, expected_status):
         """Verifies controlled HTTP 422 validation error for out-of-bounds parameters."""
         response = client.post("/api/v1/simulation/run", json=invalid_patch)
         assert response.status_code == expected_status
+
+    def test_cors_allows_local_frontend_but_not_arbitrary_origins(self):
+        local_response = client.options(
+            "/api/v1/simulation/defaults",
+            headers={
+                "Origin": "http://localhost:3000",
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+        assert local_response.headers["access-control-allow-origin"] == "http://localhost:3000"
+
+        external_response = client.options(
+            "/api/v1/simulation/defaults",
+            headers={
+                "Origin": "https://untrusted.example",
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+        assert "access-control-allow-origin" not in external_response.headers
+
+    def test_production_rejects_wildcard_cors(self, monkeypatch):
+        monkeypatch.setenv("APP_ENV", "production")
+        monkeypatch.setenv("AI_MONTE_CARLO_CORS_ORIGINS", "*")
+        with pytest.raises(RuntimeError, match="Wildcard CORS origins"):
+            create_app()
 
 
 class TestDemandEndpoints:
@@ -234,6 +263,17 @@ class TestDemandEndpoints:
         assert "cost_usd" in mc_data
         assert mc_data["cost_usd"]["mean"] > 0
         assert "probability_exceeding_budget" in mc_data
+
+    def test_demand_experiment_rejects_excessive_forecast_workload(self):
+        response = client.post(
+            "/api/v1/demand/experiment",
+            json={
+                "demand_config": {"n_days": 90, "base_demand": 10_000.0},
+                "monte_carlo_config": {"n_iterations": 1_000, "seed": 42},
+            },
+        )
+        assert response.status_code == 422
+        assert "safety limit" in response.json()["detail"]
 
     @pytest.mark.parametrize(
         "invalid_demand_patch",

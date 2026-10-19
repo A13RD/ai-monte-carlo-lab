@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from fastapi import APIRouter, HTTPException, status
 
+from ai_monte_carlo.config import MAX_EXPECTED_SIMULATED_REQUESTS
 from ai_monte_carlo.api.schemas.demand import (
     DemandExperimentRequest,
     DemandExperimentResponse,
@@ -43,7 +44,10 @@ def run_experiment(request: DemandExperimentRequest) -> DemandExperimentResponse
     t0 = time.perf_counter()
     try:
         domain_config = request.to_domain()
-        result = run_demand_experiment(domain_config)
+        result = run_demand_experiment(
+            domain_config,
+            max_expected_simulated_requests=MAX_EXPECTED_SIMULATED_REQUESTS,
+        )
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

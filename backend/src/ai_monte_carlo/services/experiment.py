@@ -127,6 +127,8 @@ class DemandExperimentResult:
 def run_demand_experiment(
     config: ExperimentConfig | None = None,
     historical_df: pd.DataFrame | None = None,
+    *,
+    max_expected_simulated_requests: int | None = None,
 ) -> DemandExperimentResult:
     """Executes the end-to-end Demand Modeling and Monte Carlo simulation workflow.
 
@@ -144,6 +146,8 @@ def run_demand_experiment(
         config: ExperimentConfig settings. Defaults to ExperimentConfig() if None.
         historical_df: Optional pre-existing DataFrame with daily requests. Must have 'requests'
                        and 'date' (or 'time_index').
+        max_expected_simulated_requests: Optional API workload guard applied to the forecast
+                                         before allocating the Monte Carlo samples.
 
     Returns:
         DemandExperimentResult containing all metrics, forecast traces, and simulation outputs.
@@ -249,6 +253,17 @@ def run_demand_experiment(
         workload=derived_workload,
         seed=cfg.seed if cfg.seed is not None else cfg.monte_carlo_config.seed,
     )
+
+    if max_expected_simulated_requests is not None:
+        expected_simulated_requests = (
+            effective_mc_config.n_iterations
+            * effective_mc_config.workload.expected_monthly_requests
+        )
+        if expected_simulated_requests > max_expected_simulated_requests:
+            raise ValueError(
+                "Expected simulated request count exceeds the safety limit of "
+                f"{max_expected_simulated_requests:,}; reduce n_iterations or forecast demand."
+            )
 
     # 7. Execute Monte Carlo Simulation
     mc_result = run_monte_carlo(effective_mc_config)

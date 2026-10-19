@@ -36,6 +36,8 @@ Laboratorio y motor de simulación estocástica para modelar el consumo de token
     - `POST /api/v1/simulation/run`: Ejecución directa del motor Monte Carlo y cálculo de métricas financieras.
     - `POST /api/v1/demand/experiment`: Pipeline integrado de predicción Poisson GLM, evaluación out-of-sample y simulación Monte Carlo coordinada.
     - `POST /api/v1/demand/forecast`: Entrenamiento de Poisson GLM y proyección del horizonte futuro de demanda.
+  - **Interfaz web:** Next.js + TypeScript; ejecuta la API real, muestra un histograma de las muestras simuladas y compara un escenario de demanda +25%.
+  - **Protección de recursos:** máximo de 30 millones de solicitudes simuladas esperadas por ejecución y CORS configurable por origen.
 
 ---
 
@@ -92,8 +94,14 @@ ai-monte-carlo-lab/
 │       ├── test_monte_carlo.py
 │       ├── test_sensitivity.py
 │       └── test_synthetic.py
+├── frontend/
+│   ├── .env.example
+│   ├── package.json
+│   └── src/app/
+├── render.yaml
 └── docs/
     ├── decisiones-tecnicas.md
+    ├── ESTADO_PROYECTO.md
     ├── modelo-matematico.md
     ├── modelo-predictivo.md
     └── validacion-avanzada.md
@@ -151,22 +159,37 @@ Una vez iniciado el servidor:
 curl -X POST "http://127.0.0.1:8000/api/v1/simulation/run" \
   -H "Content-Type: application/json" \
   -d '{
-    "n_iterations": 5000,
+    "n_iterations": 500,
     "budget_limit": 500.0,
     "pricing": {
       "cost_per_million_input": 2.50,
       "cost_per_million_output": 10.00,
       "fixed_monthly_cost": 20.00
     },
+    "workload": {
+      "mean_daily_requests": 200,
+      "days_per_month": 30
+    },
     "seed": 42
   }'
 ```
+
+Con los mismos parámetros y `seed = 42`, el resultado reproducible observado fue:
+
+| Métrica | Resultado |
+|---|---:|
+| Media del costo mensual | USD 49.988932 |
+| Desviación estándar muestral | USD 0.428200 |
+| P5 / P50 / P95 | USD 49.267083 / 49.996026 / 50.661549 |
+| Probabilidad empírica de exceder USD 500 | 0.0% |
+
+Estos números son una salida sintética del experimento descrito, no una medición de producción. La respuesta de la API incluye precisión completa; la misma configuración y semilla permiten repetirla.
 
 ---
 
 ## Ejecución de Pruebas
 
-Para correr la suite completa de 122 pruebas automatizadas (Fases 1, 2, 3 y 4):
+Para correr la suite completa de pruebas automatizadas (Fases 1, 2, 3 y 4):
 
 ```powershell
 cd backend
@@ -179,6 +202,37 @@ Para correr únicamente las pruebas de la API:
 cd backend
 python -m pytest tests/test_api.py
 ```
+
+## Interfaz web local
+
+En una terminal inicia la API (ver comando anterior). En otra terminal:
+
+```powershell
+cd frontend
+Copy-Item .env.example .env.local
+npm install
+npm run dev
+```
+
+Abre [http://localhost:3000](http://localhost:3000). El frontend obtiene la configuración inicial de `GET /api/v1/simulation/defaults` y envía cada experimento a `POST /api/v1/simulation/run`; no muestra valores ficticios como resultados.
+Valida el frontend con `npm run typecheck` y `npm run build`.
+
+## Variables de entorno
+
+- Backend: `backend/.env.example` documenta `APP_ENV` y `AI_MONTE_CARLO_CORS_ORIGINS`; configura estas variables en el entorno del proceso/plataforma. En producción, define los orígenes HTTPS exactos, separados por comas. En local, FastAPI permite por defecto `localhost:3000` y `127.0.0.1:3000`.
+- Frontend: `NEXT_PUBLIC_API_URL` es la URL base de FastAPI (por ejemplo, `http://127.0.0.1:8000` en local). En Vercel se debe configurar con la URL real del backend, nunca con localhost.
+- No guardes `.env` ni `.env.local` con valores privados en Git.
+
+## Despliegue
+
+El archivo raíz `render.yaml` prepara un servicio Python en Render que instala `backend/`, inicia Uvicorn y comprueba `/health`. Para completar el despliegue:
+
+1. Crea el proyecto de Vercel usando `frontend/` como directorio raíz y anota el origen HTTPS que Vercel le asigna.
+2. En Render, crea un Blueprint desde este repositorio y establece `AI_MONTE_CARLO_CORS_ORIGINS` con ese origen HTTPS exacto (sin comodín).
+3. Al terminar el despliegue, copia la URL HTTPS asignada al servicio Render a `NEXT_PUBLIC_API_URL` en Vercel y vuelve a desplegar el frontend.
+4. Comprueba `https://<api-render>/health`, luego abre el sitio de Vercel y ejecuta un experimento pequeño.
+
+Las URLs finales dependen de las cuentas y dominios del usuario; no se incluyen URLs inventadas ni se afirma que ya se haya desplegado.
 
 ---
 
@@ -199,3 +253,4 @@ python -m ai_monte_carlo
 - [Decisiones Técnicas de la Fase 1](docs/decisiones-tecnicas.md)
 - [Modelo Predictivo y Coordinación de la Fase 2](docs/modelo-predictivo.md)
 - [Validación Estadística Avanzada y Análisis de Incertidumbre de la Fase 3](docs/validacion-avanzada.md)
+- [Estado, pruebas y pasos de despliegue](docs/ESTADO_PROYECTO.md)

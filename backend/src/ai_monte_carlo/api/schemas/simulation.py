@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, model_validator
 from ai_monte_carlo.config import (
     DistributionType,
     LatencyConfig,
+    MAX_EXPECTED_SIMULATED_REQUESTS,
     MonteCarloConfig,
     PricingConfig,
     TokenDistributionConfig,
@@ -105,7 +106,7 @@ class SimulationRequest(BaseModel):
     """Request payload to execute a monthly Monte Carlo simulation run."""
 
     n_iterations: int = Field(
-        default=10_000,
+        default=1_000,
         ge=2,
         le=500_000,
         description="Number of Monte Carlo iterations (M >= 2)",
@@ -140,6 +141,20 @@ class SimulationRequest(BaseModel):
         description="Pseudorandom generator seed for deterministic reproducibility (optional)",
     )
 
+    @model_validator(mode="after")
+    def validate_estimated_workload(self) -> SimulationRequest:
+        expected_requests = (
+            self.n_iterations
+            * self.workload.mean_daily_requests
+            * self.workload.days_per_month
+        )
+        if expected_requests > MAX_EXPECTED_SIMULATED_REQUESTS:
+            raise ValueError(
+                "Expected simulated request count exceeds the safety limit of "
+                f"{MAX_EXPECTED_SIMULATED_REQUESTS:,}; reduce n_iterations or workload demand."
+            )
+        return self
+
     def to_domain(self) -> MonteCarloConfig:
         return MonteCarloConfig(
             n_iterations=self.n_iterations,
@@ -165,6 +180,14 @@ class MetricsSummarySchema(BaseModel):
     count: int = Field(description="Sample size / iteration count")
 
 
+class HistogramBinSchema(BaseModel):
+    """A cost histogram bin computed from the actual simulation samples."""
+
+    lower_bound: float
+    upper_bound: float
+    count: int
+
+
 class SimulationResponse(BaseModel):
     """Complete results of a Monte Carlo simulation execution."""
 
@@ -178,6 +201,9 @@ class SimulationResponse(BaseModel):
     )
     token_metrics: MetricsSummarySchema = Field(
         description="Summary statistics for total monthly token consumption"
+    )
+    cost_histogram: list[HistogramBinSchema] = Field(
+        description="Histogram bins calculated from the simulated monthly cost samples"
     )
     effective_config: dict[str, Any] = Field(
         description="Effective configuration parameters utilized in the run"

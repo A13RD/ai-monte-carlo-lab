@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from fastapi import APIRouter
 
@@ -26,7 +27,7 @@ def get_health() -> HealthStatusResponse:
     return HealthStatusResponse(
         status="healthy",
         version="0.1.0",
-        environment="production",
+        environment=os.getenv("APP_ENV", "development"),
         engines={
             "monte_carlo_engine": "ready",
             "predictive_demand_glm": "ready",

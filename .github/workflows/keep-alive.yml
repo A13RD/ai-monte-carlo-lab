@@ -1,0 +1,82 @@
+name: Render Keep-Alive
+
+on:
+  schedule:
+    # Run every 10 minutes
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: keep-alive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    name: Ping Health Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Keep-Alive Ping
+        env:
+          RAW_TARGET_URL: ${{ vars.TARGET_URL || secrets.TARGET_URL }}
+        run: |
+          set -e
+
+          if [ -z "$RAW_TARGET_URL" ]; then
+            echo "::error::TARGET_URL no esta configurada en GitHub."
+            echo "Por favor define TARGET_URL en Settings > Secrets and variables > Actions (Variables o Secrets)."
+            echo "Ejemplo: https://tu-servicio.onrender.com"
+            exit 1
+          fi
+
+          # Trim trailing slash
+          CLEAN_URL="${RAW_TARGET_URL%/}"
+
+          # Ensure /health endpoint is targeted if not already specified
+          if [[ "$CLEAN_URL" != */health* ]]; then
+            ENDPOINT_URL="${CLEAN_URL}/health"
+          else
+            ENDPOINT_URL="$CLEAN_URL"
+          fi
+
+          echo "=========================================="
+          echo " Iniciando Keep-Alive Ping"
+          echo " Timestamp UTC : $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo " Endpoint      : $ENDPOINT_URL"
+          echo "=========================================="
+
+          # Output file for response body
+          RESPONSE_BODY_FILE=$(mktemp)
+
+          # Execute curl:
+          # --silent: hide progress meter
+          # --show-error: show errors if it fails
+          # --max-time 45: wait up to 45 seconds (useful if Render is waking up)
+          # -w: format output to capture status code and latency
+          HTTP_STATUS=$(curl \
+            --silent \
+            --show-error \
+            --max-time 45 \
+            -o "$RESPONSE_BODY_FILE" \
+            -w "%{http_code}:%{time_total}" \
+            -H "User-Agent: GitHub-Actions-KeepAlive/1.0" \
+            "$ENDPOINT_URL" || echo "CURL_FAILED:0")
+
+          STATUS_CODE=$(echo "$HTTP_STATUS" | cut -d':' -f1)
+          TOTAL_TIME=$(echo "$HTTP_STATUS" | cut -d':' -f2)
+
+          echo "Tiempo de respuesta: ${TOTAL_TIME}s"
+          echo "Codigo HTTP        : ${STATUS_CODE}"
+          echo "------------------------------------------"
+          echo "Cuerpo de la respuesta:"
+          cat "$RESPONSE_BODY_FILE"
+          echo ""
+          echo "------------------------------------------"
+
+          if [ "$STATUS_CODE" != "200" ]; then
+            echo "::error::La peticion fallo con status code $STATUS_CODE (tiempo: ${TOTAL_TIME}s)"
+            rm -f "$RESPONSE_BODY_FILE"
+            exit 1
+          fi
+
+          echo "Keep-Alive exitoso: El backend de Render respondio satisfactoriamente."
+          rm -f "$RESPONSE_BODY_FILE"
